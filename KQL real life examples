@@ -1,0 +1,164 @@
+1. 
+
+Your SOC has just discovered that a hacker has been using brute force attacks against your network for the past 7 days. 
+You need to find the count of failed logins for each user account and computer being attacked during that period. 
+
+Hints and guidelines:
+Use the SecurityEvent table to begin your search.
+How would you find the EventID for failed logins using KQL?
+What column would have the account name?
+
+
+Answer Sneak Peek:
+
+SecurityEvent
+| where TimeGenerated <= ago(7d)
+| where EventID == 4625 
+| summarize count() by TargetAccount, Computer
+
+=====================================================================
+
+2.
+
+A hacker has compromised your network and has successfully logged into your network. To find the intruder, you need to find all Windows logon events starting 2 weeks ago until 1 week ago that occurred on a computer with a name which starts with “App” . 
+
+
+Hints and guidelines:
+Windows security events are stored in the table “SecurityEvent”
+The logon event id is 4624. What is the name of the field which contains the event ID? 
+What is the name of the field which represents the computer name?
+What should be the order of the commands for better performance?
+Bonus: Can you find the count per computer as well?
+
+
+SecurityEvent 
+| where TimeGenerated between (ago(14d)..ago(7d))
+| where EventID == "4624"
+| where Computer startswith "App"
+| summarize count() by Computer
+
+
+=======================================================================================================
+
+3. 
+
+An APT has installed malware on your network . 
+In order to find the traces of malware, you need to find out how many times each process ran per computer.
+
+Hints and guidelines:
+Event 4688 logs process creation.
+Which column represents the processes created?
+Which computer was it ran on?
+
+
+SecurityEvent
+| where EventID == "4688"
+| summarize count() by Process, Computer
+
+
+================================================================================
+
+Your SOC has just discovered a Crypto-Mining Agent has been installed on one of your domain controllers.
+You need to chart the rate of process creation on all domain controllers in order to discover which DC has been compromised .
+
+Hints and guidelines:
+Process creation is Windows event 4688
+All Domain controller names start with “DC”
+This will be a time chart.  (Think bin...)
+
+
+// Chart the rate of process creation on all domain controllers.
+
+SecurityEvent
+| where Computer startswith "DC"
+| where EventID == "4688" | summarize count() by Computer, bin(TimeGenerated, 1h) 
+| render timechart
+
+
+==================================================================
+Extend and project 
+####################
+
+
+Perf
+| where CounterName == "Free Megabytes" 
+| extend FreeKB = CounterValue * 1024
+| extend FreeGB = CounterValue / 1024
+| extend FreeMB = CounterValue 
+| project Computer, CounterName, FreeGB, FreeMB, FreeKB 
+
+
+
+
+=====================================================
+
+
+Your Azure Environment has suffered an attack with multiple brute force attacks. No compromise took place; however, you need to know what user account was used and what country the attacker attempted to log in from.
+The results should only show the timestamp, Status, Username and the app name. 
+Hints and guideline:
+This will involve more than one table.
+The company did have MFA enabled.
+Limit your search to the past 60 days. 
+
+
+
+//You need to know what user account was used to sign in and what country they signed in from in the past 60 days.  
+
+union SigninLogs, AADNonInteractiveUserSignInLogs
+| where TimeGenerated >= ago(60d)
+| where Status_dynamic contains "User did not pass the MFA challenge."
+| where AppDisplayName contains "Azure Portal“
+| project TimeGenerated, Status_dynamic, AppDisplayName
+
+
+
+==========================================================
+
+Join Operator 
+====================
+
+
+Merge the rows of two tables to form a new table by matching values of the specified column(s) from each table.
+
+Syntax: LeftTable | join [JoinParameters] ( RightTable ) on Attributes
+Example: SecurityEvent| join (SecurityAlert | where AlertSeverity == "high") on Status
+
+
+
+SecurityEvent
+| join Heartbeat on Computer
+| where EventID == "4688"
+| project Computer, OSType, OSMajorVersion, Version
+
+
+
+============================================================================
+
+As a part of your post incident response, you need to compare the successful and failed logons to determine what day the password spray took place. 
+You will need to render a graph of successful vs failed logons over the last 30 days, use alias for the legend (“Success”, “Failed”) to find your answer.
+
+Hints and guideline:
+Utilize Countif for each EventID
+Remember this is a time chart. 
+
+
+
+SecurityEvent
+| where TimeGenerated > ago(30d)
+| summarize 
+Success=countif(EventID == 4624), 
+Failed=countif(EventID == 4625) 
+by bin(TimeGenerated, 1h)
+| render timechart
+
+
+==========================================================
+
+Update
+| where Classification == "Security Updates" and UpdateState == "Needed" and MSRCSeverity == "Critical"
+| where Resource startswith "CH1"
+
+
+
+
+
